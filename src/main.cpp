@@ -1,3 +1,6 @@
+// TODO! make nice code view
+// TODO! add a few code comments
+
 #include <Arduino.h>
 #include <FlexCAN_T4.h>
 #include <AccelStepper.h>
@@ -111,14 +114,12 @@ void loop() {
             messageData |= msg.buf[5] << 8;
             messageData |= msg.buf[4];
 
+            // print to serial a few debug messages
             Serial1.print("messageCode: ");
             Serial1.println(messageCode, HEX);
             Serial1.print("messageData: ");
             Serial1.print(messageData, HEX);
-            float valueFloat = messageData;
             Serial1.println();
-            Serial1.print("Float value: ");
-            Serial1.print(valueFloat);
 
             switch (messageCode) {
                 case CODE_SET_SPEED:
@@ -156,28 +157,10 @@ void loop() {
             if (isMoved) {
                 Serial1.println("Moving is DONE");
                 can1.write(msg);
+            } else {
+                Serial1.println("Moving is NOT HAPPEN");
             }
         }
-//
-//
-//        long position[2];
-//        if (isNotMoved) {
-//            position[0] = 200;
-//            position[1] = 200;
-//            Serial1.println("Moving to 200");
-//            isNotMoved = false;
-//        } else {
-//            position[0] = 0;
-//            position[1] = 0;
-//            Serial1.println("Moving to 0");
-//            isNotMoved = true;
-//        }
-//        steppers.moveTo(position);
-//        bool isMovable = true;
-//        while (isMovable) {
-//            isMovable = steppers.run();
-//        }
-//
 
     }
 
