@@ -5,6 +5,7 @@
 #include <FlexCAN_T4.h>
 #include <AccelStepper.h>
 #include <MultiStepper.h>
+#include <Adafruit_ADS1015.h>
 
 
 #define LED 13
@@ -18,18 +19,34 @@
 #define MAX_SPEED 400.0
 #define PULSE_WIDTH 1
 
+#define ADS1115_I2C_ADDRESS_GND 0x48
+#define ADS1115_I2C_ADDRESS_VDD 0x49
+
+#define PWM_PIN0 14
+#define PWM_PIN1 15
+#define PWM_PIN2 2
+#define PWM_PIN3 3
+
 constexpr uint32_t DEVICE_CAN_ID = 0x640;
 constexpr uint32_t START_MOVING_ID = 0x080;
 constexpr uint32_t ADDRESS_RECEIVE_OK_ID = 0x5C0;
 constexpr uint32_t VELOCITY_POSITION_DEV_ID = 0x440;
 constexpr uint32_t VELOCITY_POSITION_OK_ID = 0x3C0;
 
-constexpr uint32_t MESSAGE_TYPE = 0x23;
+constexpr uint32_t MESSAGE_TYPE_STEPPER_MOVING = 0x23;
 constexpr uint32_t SUB_REGISTER_ADDRESS = 0x00;
 
 constexpr uint32_t CODE_SET_SPEED = 0x8160;
 constexpr uint32_t CODE_SET_ACCELERATION = 0x8360;
 constexpr uint32_t CODE_SET_POSITION = 0x7A60;
+
+constexpr uint32_t MESSAGE_TYPE_REQUEST_CHANNEL_AD_DATA = 0x40;
+constexpr uint32_t MESSAGE_TYPE_RETURN_CHANNEL_AD_DATA = 0x43;
+constexpr uint32_t CODE_CHANNEL_AD = 0x0061;
+
+constexpr uint32_t MESSAGE_TYPE_SET_PWM = 0x23;
+constexpr uint32_t CODE_SET_PWM = 0x0062;
+
 
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> can1;
 CAN_message_t msg;
@@ -37,10 +54,18 @@ AccelStepper stepper1(AccelStepper::DRIVER, STEPPER1_STEP_PIN, STEPPER1_DIR_PIN)
 AccelStepper stepper2(AccelStepper::DRIVER, STEPPER2_STEP_PIN, STEPPER2_DIR_PIN);
 MultiStepper steppers;
 long stepperPositions[2];
+Adafruit_ADS1115 adsGND(ADS1115_I2C_ADDRESS_GND);
+Adafruit_ADS1115 adsVDD(ADS1115_I2C_ADDRESS_VDD);
 
 void setup() {
     // enable LED indication
     pinMode(LED, OUTPUT);
+
+    // enable pins for PWM
+    pinMode(PWM_PIN0, OUTPUT);
+    pinMode(PWM_PIN1, OUTPUT);
+    pinMode(PWM_PIN2, OUTPUT);
+    pinMode(PWM_PIN3, OUTPUT);
 
     // enable stepper pins
     pinMode(STEPPER1_DIR_PIN, OUTPUT);
@@ -73,6 +98,19 @@ void setup() {
     // start CAN port for the CAN1 connection on the 22/23 ports
     can1.begin();
     can1.setBaudRate(500000);
+
+    // start both ADS1115 analog-digital sensor
+    adsGND.begin();
+    adsVDD.begin();
+
+    // set initial frequency 1kHz for PWM pins
+    analogWriteFrequency(PWM_PIN0, 1000);
+    analogWriteFrequency(PWM_PIN1, 1000);
+    analogWriteFrequency(PWM_PIN2, 1000);
+    analogWriteFrequency(PWM_PIN3, 1000);
+
+    // set initial resolution for PWM pins
+    analogWriteResolution(4096);
 
     // start serial1 ports
     Serial1.begin(115200);
@@ -132,7 +170,10 @@ void loop() {
         } else if (DEVICE_CAN_ID == msg.id) {
             // send back received message, which confirm message getting.
             msg.id = ADDRESS_RECEIVE_OK_ID;
-            can1.write(msg);
+            // it doesn't send back the same message if it works with channels
+            if (MESSAGE_TYPE_REQUEST_CHANNEL_AD_DATA != msg.buf[0]) {
+                can1.write(msg);
+            }
 
             // get message code type
             uint32_t messageCode = msg.buf[1] << 8;
@@ -151,6 +192,8 @@ void loop() {
             Serial1.print(messageData, HEX);
             Serial1.println();
 
+            int16_t adData = 0;
+
             switch (messageCode) {
                 case CODE_SET_SPEED:
                     stepper1.setMaxSpeed(messageData);
@@ -166,6 +209,52 @@ void loop() {
                     stepperPositions[0] = messageData;
                     stepperPositions[1] = messageData;
                     Serial1.println("Position is set");
+                    break;
+                case CODE_CHANNEL_AD:
+                    // read data from interested sensor
+                    switch (msg.buf[3]) {
+                        case 0x00:
+                            adData = adsVDD.readADC_Differential_0_1();
+                            break;
+                        case 0x01:
+                            adData = adsVDD.readADC_Differential_2_3();
+                            break;
+                        case 0x02:
+                            adData = adsGND.readADC_Differential_0_1();
+                            break;
+                        case 0x03:
+                            adData = adsGND.readADC_Differential_2_3();
+                            break;
+                    }
+
+                    msg.buf[0] = MESSAGE_TYPE_RETURN_CHANNEL_AD_DATA;
+                    msg.buf[4] = adData;
+                    msg.buf[5] = adData >> 8;
+                    msg.buf[6] = 0x0;
+                    msg.buf[7] = 0x0;
+                    can1.write(msg);
+
+                    // a bit debug messages to Serial1
+                    Serial1.print("get AM");
+                    Serial1.print(msg.buf[3], HEX);
+                    Serial1.print(": ");
+                    Serial1.println(adData);
+                    break;
+                case CODE_SET_PWM:
+                    switch (msg.buf[3]) {
+                        case 0x00:
+                            Serial1.println("set PWM 00");
+                            break;
+                        case 0x01:
+                            Serial1.println("set PWM 01");
+                            break;
+                        case 0x02:
+                            Serial1.println("set PWM 02");
+                            break;
+                        case 0x03:
+                            Serial1.println("set PWM 03");
+                            break;
+                    }
                     break;
             }
 
