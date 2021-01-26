@@ -8,8 +8,7 @@
 
 
 #define LED 13
-#define STEPPER1_DIR_PIN 8
-#define STEPPER1_STEP_PIN 7
+
 #define STEPPER2_DIR_PIN 10
 #define STEPPER2_STEP_PIN 9
 
@@ -18,11 +17,11 @@
 #define MAX_SPEED 400.0
 #define PULSE_WIDTH 1
 
-constexpr uint32_t DEVICE_CAN_ID = 0x640;
+constexpr uint32_t DEVICE_CAN_ID = 0x641;
 constexpr uint32_t START_MOVING_ID = 0x080;
-constexpr uint32_t ADDRESS_RECEIVE_OK_ID = 0x5C0;
-constexpr uint32_t VELOCITY_POSITION_DEV_ID = 0x440;
-constexpr uint32_t VELOCITY_POSITION_OK_ID = 0x3C0;
+constexpr uint32_t ADDRESS_RECEIVE_OK_ID = 0x5C1;
+constexpr uint32_t VELOCITY_POSITION_DEV_ID = 0x441;
+constexpr uint32_t VELOCITY_POSITION_OK_ID = 0x3C1;
 
 constexpr uint32_t MESSAGE_TYPE = 0x23;
 constexpr uint32_t SUB_REGISTER_ADDRESS = 0x00;
@@ -33,27 +32,18 @@ constexpr uint32_t CODE_SET_POSITION = 0x7A60;
 
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> can1;
 CAN_message_t msg;
-AccelStepper stepper1(AccelStepper::DRIVER, STEPPER1_STEP_PIN, STEPPER1_DIR_PIN);
+
 AccelStepper stepper2(AccelStepper::DRIVER, STEPPER2_STEP_PIN, STEPPER2_DIR_PIN);
 MultiStepper steppers;
-long stepperPositions[2];
+long stepperPositions[1];
 
 void setup() {
     // enable LED indication
     pinMode(LED, OUTPUT);
 
     // enable stepper pins
-    pinMode(STEPPER1_DIR_PIN, OUTPUT);
-    pinMode(STEPPER1_STEP_PIN, OUTPUT);
     pinMode(STEPPER2_DIR_PIN, OUTPUT);
     pinMode(STEPPER2_STEP_PIN, OUTPUT);
-
-    // Configure the first stepper
-    stepper1.setEnablePin(STEPPERS_ENABLE);
-    stepper1.setPinsInverted(false, false, true); //dir stp enable
-    stepper1.setMinPulseWidth(PULSE_WIDTH);
-    stepper1.setMaxSpeed(MAX_SPEED);
-    stepper1.setAcceleration(ACCELERATION);
 
     // Configure the second stepper
     stepper2.setEnablePin(STEPPERS_ENABLE);
@@ -63,12 +53,10 @@ void setup() {
     stepper2.setAcceleration(ACCELERATION);
 
     // Then give them to MultiStepper to manage
-    steppers.addStepper(stepper1);
     steppers.addStepper(stepper2);
 
 
     stepperPositions[0] = 0;
-    stepperPositions[1] = 0;
 
     // start CAN port for the CAN1 connection on the 22/23 ports
     can1.begin();
@@ -119,12 +107,10 @@ void loop() {
             messageDataVelocity |= msg.buf[4];
 
             // set max speed to steppers
-            stepper1.setMaxSpeed(messageDataVelocity);
             stepper2.setMaxSpeed(messageDataVelocity);
 
             // set position to steppers
             stepperPositions[0] = messageDataPosition;
-            stepperPositions[1] = messageDataPosition;
 
             // a bit debug
             Serial1.println("MaxSpeed is set");
@@ -153,32 +139,27 @@ void loop() {
 
             switch (messageCode) {
                 case CODE_SET_SPEED:
-                    stepper1.setMaxSpeed(messageData);
                     stepper2.setMaxSpeed(messageData);
                     Serial1.println("MaxSpeed is set");
                     break;
                 case CODE_SET_ACCELERATION:
-                    stepper1.setAcceleration(messageData);
                     stepper2.setAcceleration(messageData);
                     Serial1.println("Acceleration is set");
                     break;
                 case CODE_SET_POSITION:
                     stepperPositions[0] = messageData;
-                    stepperPositions[1] = messageData;
                     Serial1.println("Position is set");
                     break;
             }
 
         } else if (START_MOVING_ID == msg.id) {
             Serial1.println("Moving is START");
-            stepper1.enableOutputs();
             stepper2.enableOutputs();
             steppers.moveTo(stepperPositions);
             bool isMoved = false;
             while (steppers.run()) {
                 isMoved = true;
             }
-            stepper1.disableOutputs();
             stepper2.disableOutputs();
             msg.id = ADDRESS_RECEIVE_OK_ID;
             for (uint8_t i = 0; i < 8; i++) {
