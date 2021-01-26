@@ -18,9 +18,9 @@
 #define MAX_SPEED 400.0
 #define PULSE_WIDTH 1
 
-constexpr uint32_t DEVICE_CAN_ID = 0x680;
+constexpr uint32_t DEVICE_CAN_ID = 0x640;
 constexpr uint32_t START_MOVING_ID = 0x080;
-constexpr uint32_t ADDRESS_RECEIVE_OK_ID = 0x680;
+constexpr uint32_t ADDRESS_RECEIVE_OK_ID = 0x5C0;
 
 constexpr uint32_t MESSAGE_TYPE = 0x23;
 constexpr uint32_t SUB_REGISTER_ADDRESS = 0x00;
@@ -102,6 +102,7 @@ void loop() {
 
         if (DEVICE_CAN_ID == msg.id) {
             // send back received message, which confirm message getting.
+            msg.id = ADDRESS_RECEIVE_OK_ID;
             can1.write(msg);
 
             // get message code type
@@ -150,7 +151,7 @@ void loop() {
             }
             stepper1.disableOutputs();
             stepper2.disableOutputs();
-            msg.id = 0x680;
+            msg.id = ADDRESS_RECEIVE_OK_ID;
             for (uint8_t i = 0; i < 8; i++) {
                 msg.buf[i] = 0x0;
             }
