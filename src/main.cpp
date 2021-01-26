@@ -21,6 +21,8 @@
 constexpr uint32_t DEVICE_CAN_ID = 0x640;
 constexpr uint32_t START_MOVING_ID = 0x080;
 constexpr uint32_t ADDRESS_RECEIVE_OK_ID = 0x5C0;
+constexpr uint32_t VELOCITY_POSITION_DEV_ID = 0x440;
+constexpr uint32_t VELOCITY_POSITION_OK_ID = 0x3C0;
 
 constexpr uint32_t MESSAGE_TYPE = 0x23;
 constexpr uint32_t SUB_REGISTER_ADDRESS = 0x00;
@@ -99,8 +101,35 @@ void loop() {
         }
         Serial1.print("  TS: ");
         Serial1.println(msg.timestamp);
+        if (VELOCITY_POSITION_DEV_ID == msg.id) {
+            // send back received message, which confirm message getting.
+            msg.id = VELOCITY_POSITION_OK_ID;
+            can1.write(msg);
 
-        if (DEVICE_CAN_ID == msg.id) {
+            // get message data (position) from code
+            uint32_t messageDataPosition = msg.buf[3] << 24;
+            messageDataPosition |= msg.buf[2] << 16;
+            messageDataPosition |= msg.buf[1] << 8;
+            messageDataPosition |= msg.buf[0];
+
+            // get message data (speed=velocity) from code
+            uint32_t messageDataVelocity = msg.buf[7] << 24;
+            messageDataVelocity |= msg.buf[6] << 16;
+            messageDataVelocity |= msg.buf[5] << 8;
+            messageDataVelocity |= msg.buf[4];
+
+            // set max speed to steppers
+            stepper1.setMaxSpeed(messageDataVelocity);
+            stepper2.setMaxSpeed(messageDataVelocity);
+
+            // set position to steppers
+            stepperPositions[0] = messageDataPosition;
+            stepperPositions[1] = messageDataPosition;
+
+            // a bit debug
+            Serial1.println("MaxSpeed is set");
+            Serial1.println("Position is set");
+        } else if (DEVICE_CAN_ID == msg.id) {
             // send back received message, which confirm message getting.
             msg.id = ADDRESS_RECEIVE_OK_ID;
             can1.write(msg);
