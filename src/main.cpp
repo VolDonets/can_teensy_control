@@ -47,6 +47,9 @@ constexpr uint32_t CODE_CHANNEL_AD = 0x0061;
 constexpr uint32_t MESSAGE_TYPE_SET_PWM = 0x23;
 constexpr uint32_t CODE_SET_PWM = 0x0062;
 
+constexpr uint32_t RESOLUTION_PWM_BYTE = 2;
+constexpr float RESOLUTION_PWM_BIT = 32767.0;
+
 
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> can1;
 CAN_message_t msg;
@@ -110,7 +113,7 @@ void setup() {
     analogWriteFrequency(PWM_PIN3, 1000);
 
     // set initial resolution for PWM pins
-    analogWriteResolution(4096);
+    analogWriteResolution(15);
 
     // start serial1 ports
     Serial1.begin(115200);
@@ -194,6 +197,8 @@ void loop() {
 
             int16_t adData = 0;
 
+            float pwmValue;
+
             switch (messageCode) {
                 case CODE_SET_SPEED:
                     stepper1.setMaxSpeed(messageData);
@@ -241,20 +246,26 @@ void loop() {
                     Serial1.println(adData);
                     break;
                 case CODE_SET_PWM:
+                    pwmValue = messageData;
+                    pwmValue = (pwmValue * RESOLUTION_PWM_BIT) / 100;
                     switch (msg.buf[3]) {
                         case 0x00:
-                            Serial1.println("set PWM 00");
+                            analogWrite(PWM_PIN0, pwmValue);
                             break;
                         case 0x01:
-                            Serial1.println("set PWM 01");
+                            analogWrite(PWM_PIN1, pwmValue);
                             break;
                         case 0x02:
-                            Serial1.println("set PWM 02");
+                            analogWrite(PWM_PIN2, pwmValue);
                             break;
                         case 0x03:
-                            Serial1.println("set PWM 03");
+                            analogWrite(PWM_PIN3, pwmValue);
                             break;
                     }
+
+                    // a bit debug messages to Serial1
+                    Serial1.print("set PWM for PIN:");
+                    Serial1.println();
                     break;
             }
 
