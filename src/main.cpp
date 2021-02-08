@@ -6,7 +6,13 @@
 #include <AccelStepper.h>
 #include <MultiStepper.h>
 #include <Adafruit_ADS1015.h>
+#include <Bounce2.h>
 
+//------ STOPS ------
+#define STOP_BOT_PIN      11
+#define STOP_BOT_DEBOUNCE 30 //ms
+#define STOP_TOP_PIN      12
+#define STOP_TOP_DEBOUNCE 30 //ms
 
 #define LED 13
 #define STEPPER1_DIR_PIN 8
@@ -32,13 +38,17 @@ constexpr uint32_t START_MOVING_ID = 0x080;
 constexpr uint32_t ADDRESS_RECEIVE_OK_ID = 0x5C0;
 constexpr uint32_t VELOCITY_POSITION_DEV_ID = 0x440;
 constexpr uint32_t VELOCITY_POSITION_OK_ID = 0x3C0;
+constexpr uint32_t HOMING_RESULT_CAN_ID = 0x3C0;
 
 constexpr uint32_t MESSAGE_TYPE_STEPPER_MOVING = 0x23;
 constexpr uint32_t SUB_REGISTER_ADDRESS = 0x00;
 
-constexpr uint32_t CODE_SET_SPEED = 0x8160;
-constexpr uint32_t CODE_SET_ACCELERATION = 0x8360;
-constexpr uint32_t CODE_SET_POSITION = 0x7A60;
+constexpr uint32_t CODE_SET_SPEED =         0x8160;
+constexpr uint32_t CODE_SET_ACCELERATION =  0x8360;
+constexpr uint32_t CODE_SET_POSITION =      0x7A60;
+constexpr uint32_t CODE_SET_HOME_TO_SPEED = 0x7C60;
+constexpr uint32_t CODE_SET_HOME_OFFSET =   0x9960;
+constexpr uint32_t CODE_SET_GO_HOME =       0x6060;
 
 constexpr uint32_t MESSAGE_TYPE_REQUEST_CHANNEL_AD_DATA = 0x40;
 constexpr uint32_t MESSAGE_TYPE_RETURN_CHANNEL_AD_DATA = 0x43;
@@ -59,6 +69,32 @@ MultiStepper steppers;
 long stepperPositions[2];
 Adafruit_ADS1115 adsGND(ADS1115_I2C_ADDRESS_GND);
 Adafruit_ADS1115 adsVDD(ADS1115_I2C_ADDRESS_VDD);
+
+float justMovingSpeed = 0.0;
+
+long homePositionOffset = 0;
+float homeMovingSpeed = 100.0;
+
+bool isTopNotStopped;
+
+/// this is a debouncer, which prevent mechanical noise on stop-end activation
+Bounce debouncerTop = Bounce();
+Bounce debouncerBottom = Bounce();
+
+void stopTopContactISR() {
+    debouncerTop.update();
+    // Call code if button transitions from HIGH to LOW
+    if (debouncerTop.fell()) {
+        Serial1.println("fell() = TRUE");
+    } else {
+        Serial1.println("fell() = FALSE");
+    }
+    isTopNotStopped = false;
+}
+
+void stopBottomContactISR() {
+
+}
 
 void setup() {
     // enable LED indication
@@ -115,12 +151,25 @@ void setup() {
     // set initial resolution for PWM pins
     analogWriteResolution(15);
 
+    // add stop contacts
+    // Attach the debouncer to a pin with INPUT_PULLDOWN mode
+    debouncerTop.attach(STOP_BOT_PIN, INPUT_PULLDOWN);
+    debouncerTop.interval(STOP_BOT_DEBOUNCE);
+    attachInterrupt(STOP_BOT_PIN, stopBottomContactISR, CHANGE);
+    // Attach the debouncer to a pin with INPUT_PULLDOWN mode
+    debouncerBottom.attach(STOP_TOP_PIN, INPUT_PULLDOWN);
+    debouncerBottom.interval(STOP_TOP_DEBOUNCE);
+    attachInterrupt(STOP_TOP_PIN, stopTopContactISR, CHANGE);
+
     // start serial1 ports
     Serial1.begin(115200);
 
     // wait for serial1 port to connect. Needed for native USB port only
     while (!Serial1) { ;
     }
+
+    // a bit debug
+    Serial1.println("Serial1 enabled!!!!");
 }
 
 void loop() {
@@ -160,8 +209,7 @@ void loop() {
             messageDataVelocity |= msg.buf[4];
 
             // set max speed to steppers
-            stepper1.setMaxSpeed(messageDataVelocity);
-            stepper2.setMaxSpeed(messageDataVelocity);
+            justMovingSpeed = messageDataVelocity;
 
             // set position to steppers
             stepperPositions[0] = messageDataPosition;
@@ -201,8 +249,7 @@ void loop() {
 
             switch (messageCode) {
                 case CODE_SET_SPEED:
-                    stepper1.setMaxSpeed(messageData);
-                    stepper2.setMaxSpeed(messageData);
+                    justMovingSpeed = messageData;
                     Serial1.println("MaxSpeed is set");
                     break;
                 case CODE_SET_ACCELERATION:
@@ -267,10 +314,73 @@ void loop() {
                     Serial1.print("set PWM for PIN:");
                     Serial1.println();
                     break;
+                case CODE_SET_HOME_OFFSET:
+                    homePositionOffset = messageData;
+
+                    // a bit debug messages to Serial1
+                    Serial1.print("Offset near home position: ");
+                    Serial1.println(homePositionOffset, DEC);
+                    break;
+                case CODE_SET_HOME_TO_SPEED:
+                    homeMovingSpeed = messageData;
+
+                    // a bit debug messages to Serial1
+                    Serial1.print("Moving speed to home: ");
+                    Serial1.println(homeMovingSpeed, DEC);
+                    break;
+                case CODE_SET_GO_HOME:
+                    // set homeMovingSpeed as a maximum speed for the steppers
+                    stepper1.setMaxSpeed(homeMovingSpeed);
+                    stepper2.setMaxSpeed(homeMovingSpeed);
+
+                    // move while no stop flag enabled, for this look function stopTopContactISR()
+                    isTopNotStopped = true;
+                    while (isTopNotStopped) {
+                        stepperPositions[0] = stepper1.currentPosition() + 100;
+                        stepperPositions[1] = stepper2.currentPosition() + 100;
+                        steppers.moveTo(stepperPositions);
+                        while (isTopNotStopped && steppers.run()){ ; }
+                    }
+
+                    // move while no stop flag disable, for this look function stopTopContactISR()
+                    isTopNotStopped = true;
+                    while (isTopNotStopped) {
+                        stepperPositions[0] = stepper1.currentPosition() - 100;
+                        stepperPositions[1] = stepper2.currentPosition() - 100;
+                        steppers.moveTo(stepperPositions);
+                        while (isTopNotStopped && steppers.run()) { ; }
+                    }
+
+                    // move from the stop point on the offset
+                    stepperPositions[0] = stepper1.currentPosition() - homePositionOffset;
+                    stepperPositions[1] = stepper2.currentPosition() - homePositionOffset;
+                    steppers.moveTo(stepperPositions);
+                    while (steppers.run()) { ; }
+
+                    // return a new current position for the master device
+                    msg.id = HOMING_RESULT_CAN_ID;
+                    // set position
+                    msg.buf[0] = stepper1.currentPosition();
+                    msg.buf[1] = stepper1.currentPosition() >> 8;
+                    msg.buf[2] = stepper1.currentPosition() >> 16;
+                    msg.buf[3] = stepper1.currentPosition() >> 24;
+                    // set speed
+                    msg.buf[4] = (int32_t) homeMovingSpeed;
+                    msg.buf[5] = ((int32_t) homeMovingSpeed) >> 8;
+                    msg.buf[6] = ((int32_t) homeMovingSpeed) >> 16;
+                    msg.buf[7] = ((int32_t) homeMovingSpeed) >> 24;
+                    // send a message to the CAN1
+                    can1.write(msg);
+
+                    // a bit debug
+                    Serial1.println("Homing is DONE!");
+                    break;
             }
 
         } else if (START_MOVING_ID == msg.id) {
             Serial1.println("Moving is START");
+            stepper1.setMaxSpeed(justMovingSpeed);
+            stepper2.setMaxSpeed(justMovingSpeed);
             stepper1.enableOutputs();
             stepper2.enableOutputs();
             steppers.moveTo(stepperPositions);
