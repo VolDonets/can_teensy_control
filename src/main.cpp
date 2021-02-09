@@ -61,6 +61,10 @@ constexpr uint32_t CODE_SET_PWM = 0x0062;
 constexpr uint32_t RESOLUTION_PWM_BYTE = 2;
 constexpr float RESOLUTION_PWM_BIT = 32767.0;
 
+constexpr uint32_t CODE_GET_ENDSTOP_STATES = 0xFD60;
+constexpr uint32_t MESSAGE_TYPE_REQUEST =    0x40;
+constexpr uint32_t MESSAGE_TYPE_REPORT =     0x43;
+
 
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> can1;
 CAN_message_t msg;
@@ -404,6 +408,17 @@ void loop() {
 
                     // a bit debug
                     Serial1.println("Homing is DONE!");
+                    break;
+                case CODE_GET_ENDSTOP_STATES:
+                    // prepare a report message and read current PINs states
+                    msg.id = ADDRESS_RECEIVE_OK_ID;
+                    msg.buf[0] = MESSAGE_TYPE_REPORT;
+                    msg.buf[3] = 0x00;
+                    msg.buf[4] = 0x00;
+                    msg.buf[5] = 0x00;
+                    msg.buf[6] = (digitalRead(STOP_BOT_PIN) << 1) || digitalRead(STOP_TOP_PIN);
+                    msg.buf[7] = 0x00;
+                    can1.write(msg);
                     break;
             }
 
