@@ -8,6 +8,9 @@
 #include <Adafruit_ADS1015.h>
 #include <Bounce2.h>
 
+/// BOARD ID value (it determines an board address in CAN bus)
+constexpr int8_t BOARD_ID = 0x0;
+
 //------ STOPS ------
 #define STOP_BOT_PIN      11
 #define STOP_BOT_DEBOUNCE 30 //ms
@@ -33,9 +36,9 @@
 #define PWM_PIN2 2
 #define PWM_PIN3 3
 
-constexpr uint32_t DEVICE_CAN_ID = 0x640;
+constexpr uint32_t DEVICE_CAN_ID = 0x640 + BOARD_ID;
 constexpr uint32_t START_MOVING_ID = 0x080;
-constexpr uint32_t ADDRESS_RECEIVE_OK_ID = 0x5C0;
+constexpr uint32_t ADDRESS_RECEIVE_OK_ID = 0x5C0 + BOARD_ID;
 constexpr uint32_t VELOCITY_POSITION_STEPPER_0_DEV_ID = 0x440;
 constexpr uint32_t VELOCITY_POSITION_STEPPER_1_DEV_ID = 0x441;
 constexpr uint32_t VELOCITY_POSITION_OK_ID = 0x3C0;
