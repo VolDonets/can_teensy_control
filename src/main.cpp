@@ -43,12 +43,12 @@ constexpr uint32_t HOMING_RESULT_CAN_ID = 0x3C0;
 constexpr uint32_t MESSAGE_TYPE_STEPPER_MOVING = 0x23;
 constexpr uint32_t SUB_REGISTER_ADDRESS = 0x00;
 
-constexpr uint32_t CODE_SET_SPEED =         0x8160;
-constexpr uint32_t CODE_SET_ACCELERATION =  0x8360;
-constexpr uint32_t CODE_SET_POSITION =      0x7A60;
-constexpr uint32_t CODE_SET_HOME_TO_SPEED = 0x7C60;
-constexpr uint32_t CODE_SET_HOME_OFFSET =   0x9960;
-constexpr uint32_t CODE_SET_GO_HOME =       0x6060;
+constexpr uint32_t CODE_SET_SPEED = 0x8160;
+constexpr uint32_t CODE_SET_ACCELERATION = 0x8360;
+constexpr uint32_t CODE_SET_POSITION = 0x7A60;
+constexpr uint32_t CODE_SET_HOME_OFFSET = 0x7C60;
+constexpr uint32_t CODE_SET_HOME_SPEED = 0x9960;
+constexpr uint32_t CODE_SET_GO_HOME = 0x6060;
 
 constexpr uint32_t MESSAGE_TYPE_REQUEST_CHANNEL_AD_DATA = 0x40;
 constexpr uint32_t MESSAGE_TYPE_RETURN_CHANNEL_AD_DATA = 0x43;
@@ -152,12 +152,12 @@ void setup() {
     analogWriteResolution(15);
 
     // add stop contacts
-    // Attach the debouncer to a pin with INPUT_PULLDOWN mode
-    debouncerTop.attach(STOP_BOT_PIN, INPUT_PULLDOWN);
+    // Attach the debouncer to a pin with INPUT_PULLUP mode
+    debouncerTop.attach(STOP_BOT_PIN, INPUT_PULLUP);
     debouncerTop.interval(STOP_BOT_DEBOUNCE);
     attachInterrupt(STOP_BOT_PIN, stopBottomContactISR, CHANGE);
-    // Attach the debouncer to a pin with INPUT_PULLDOWN mode
-    debouncerBottom.attach(STOP_TOP_PIN, INPUT_PULLDOWN);
+    // Attach the debouncer to a pin with INPUT_PULLUP mode
+    debouncerBottom.attach(STOP_TOP_PIN, INPUT_PULLUP);
     debouncerBottom.interval(STOP_TOP_DEBOUNCE);
     attachInterrupt(STOP_TOP_PIN, stopTopContactISR, CHANGE);
 
@@ -321,7 +321,7 @@ void loop() {
                     Serial1.print("Offset near home position: ");
                     Serial1.println(homePositionOffset, DEC);
                     break;
-                case CODE_SET_HOME_TO_SPEED:
+                case CODE_SET_HOME_SPEED:
                     homeMovingSpeed = messageData;
 
                     // a bit debug messages to Serial1
@@ -332,23 +332,34 @@ void loop() {
                     // set homeMovingSpeed as a maximum speed for the steppers
                     stepper1.setMaxSpeed(homeMovingSpeed);
                     stepper2.setMaxSpeed(homeMovingSpeed);
+                    stepper1.enableOutputs();
+                    stepper2.enableOutputs();
 
                     // move while no stop flag enabled, for this look function stopTopContactISR()
                     isTopNotStopped = true;
-                    while (isTopNotStopped) {
-                        stepperPositions[0] = stepper1.currentPosition() + 100;
-                        stepperPositions[1] = stepper2.currentPosition() + 100;
-                        steppers.moveTo(stepperPositions);
-                        while (isTopNotStopped && steppers.run()){ ; }
+                    stepperPositions[0] = stepper1.currentPosition() + 100;
+                    stepperPositions[1] = stepper2.currentPosition() + 100;
+                    steppers.moveTo(stepperPositions);
+                    while (isTopNotStopped && steppers.run()) {
+                        if (abs(stepper1.targetPosition() - stepper1.currentPosition()) < 50) {
+                            stepperPositions[0] = stepper1.currentPosition() + 100;
+                            stepperPositions[1] = stepper2.currentPosition() + 100;
+                            steppers.moveTo(stepperPositions);
+                        }
                     }
+
 
                     // move while no stop flag disable, for this look function stopTopContactISR()
                     isTopNotStopped = true;
-                    while (isTopNotStopped) {
-                        stepperPositions[0] = stepper1.currentPosition() - 100;
-                        stepperPositions[1] = stepper2.currentPosition() - 100;
-                        steppers.moveTo(stepperPositions);
-                        while (isTopNotStopped && steppers.run()) { ; }
+                    stepperPositions[0] = stepper1.currentPosition() - 100;
+                    stepperPositions[1] = stepper2.currentPosition() - 100;
+                    steppers.moveTo(stepperPositions);
+                    while (isTopNotStopped && steppers.run()) {
+                        if (abs(stepper1.targetPosition() - stepper1.currentPosition()) < 50) {
+                            stepperPositions[0] = stepper1.currentPosition() - 100;
+                            stepperPositions[1] = stepper2.currentPosition() - 100;
+                            steppers.moveTo(stepperPositions);
+                        }
                     }
 
                     // move from the stop point on the offset
@@ -356,6 +367,8 @@ void loop() {
                     stepperPositions[1] = stepper2.currentPosition() - homePositionOffset;
                     steppers.moveTo(stepperPositions);
                     while (steppers.run()) { ; }
+                    stepper1.disableOutputs();
+                    stepper2.disableOutputs();
 
                     // return a new current position for the master device
                     msg.id = HOMING_RESULT_CAN_ID;
