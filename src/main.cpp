@@ -36,7 +36,8 @@
 constexpr uint32_t DEVICE_CAN_ID = 0x640;
 constexpr uint32_t START_MOVING_ID = 0x080;
 constexpr uint32_t ADDRESS_RECEIVE_OK_ID = 0x5C0;
-constexpr uint32_t VELOCITY_POSITION_DEV_ID = 0x440;
+constexpr uint32_t VELOCITY_POSITION_STEPPER_0_DEV_ID = 0x440;
+constexpr uint32_t VELOCITY_POSITION_STEPPER_1_DEV_ID = 0x441;
 constexpr uint32_t VELOCITY_POSITION_OK_ID = 0x3C0;
 constexpr uint32_t HOMING_RESULT_CAN_ID = 0x3C0;
 
@@ -63,14 +64,15 @@ constexpr float RESOLUTION_PWM_BIT = 32767.0;
 
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> can1;
 CAN_message_t msg;
-AccelStepper stepper1(AccelStepper::DRIVER, STEPPER1_STEP_PIN, STEPPER1_DIR_PIN);
-AccelStepper stepper2(AccelStepper::DRIVER, STEPPER2_STEP_PIN, STEPPER2_DIR_PIN);
+AccelStepper stepper0(AccelStepper::DRIVER, STEPPER1_STEP_PIN, STEPPER1_DIR_PIN);
+AccelStepper stepper1(AccelStepper::DRIVER, STEPPER2_STEP_PIN, STEPPER2_DIR_PIN);
 MultiStepper steppers;
 long stepperPositions[2];
 Adafruit_ADS1115 adsGND(ADS1115_I2C_ADDRESS_GND);
 Adafruit_ADS1115 adsVDD(ADS1115_I2C_ADDRESS_VDD);
 
-float justMovingSpeed = 0.0;
+float justMovingSpeedStepper1 = 0.0;
+float justMovingSpeedStepper2 = 0.0;
 
 long homePositionOffset = 0;
 float homeMovingSpeed = 100.0;
@@ -113,22 +115,22 @@ void setup() {
     pinMode(STEPPER2_STEP_PIN, OUTPUT);
 
     // Configure the first stepper
+    stepper0.setEnablePin(STEPPERS_ENABLE);
+    stepper0.setPinsInverted(false, false, true); //dir stp enable
+    stepper0.setMinPulseWidth(PULSE_WIDTH);
+    stepper0.setMaxSpeed(MAX_SPEED);
+    stepper0.setAcceleration(ACCELERATION);
+
+    // Configure the second stepper
     stepper1.setEnablePin(STEPPERS_ENABLE);
-    stepper1.setPinsInverted(false, false, true); //dir stp enable
+    stepper1.setPinsInverted(false, false, true); //dir stp enable //does not work, enabling manually
     stepper1.setMinPulseWidth(PULSE_WIDTH);
     stepper1.setMaxSpeed(MAX_SPEED);
     stepper1.setAcceleration(ACCELERATION);
 
-    // Configure the second stepper
-    stepper2.setEnablePin(STEPPERS_ENABLE);
-    stepper2.setPinsInverted(false, false, true); //dir stp enable //does not work, enabling manually
-    stepper2.setMinPulseWidth(PULSE_WIDTH);
-    stepper2.setMaxSpeed(MAX_SPEED);
-    stepper2.setAcceleration(ACCELERATION);
-
     // Then give them to MultiStepper to manage
+    steppers.addStepper(stepper0);
     steppers.addStepper(stepper1);
-    steppers.addStepper(stepper2);
 
 
     stepperPositions[0] = 0;
@@ -191,11 +193,8 @@ void loop() {
         }
         Serial1.print("  TS: ");
         Serial1.println(msg.timestamp);
-        if (VELOCITY_POSITION_DEV_ID == msg.id) {
-            // send back received message, which confirm message getting.
-            msg.id = VELOCITY_POSITION_OK_ID;
-            can1.write(msg);
-
+        if ((VELOCITY_POSITION_STEPPER_0_DEV_ID == msg.id)
+            || (VELOCITY_POSITION_STEPPER_1_DEV_ID == msg.id)) {
             // get message data (position) from code
             uint32_t messageDataPosition = msg.buf[3] << 24;
             messageDataPosition |= msg.buf[2] << 16;
@@ -208,16 +207,33 @@ void loop() {
             messageDataVelocity |= msg.buf[5] << 8;
             messageDataVelocity |= msg.buf[4];
 
-            // set max speed to steppers
-            justMovingSpeed = messageDataVelocity;
+            // set max speed to steppers and set position to steppers
+            switch (msg.id) {
+                case VELOCITY_POSITION_STEPPER_0_DEV_ID:
+                    justMovingSpeedStepper1 = messageDataVelocity;
+                    stepperPositions[0] = messageDataPosition;
 
-            // set position to steppers
-            stepperPositions[0] = messageDataPosition;
-            stepperPositions[1] = messageDataPosition;
+                    // a bit debug
+                    Serial1.print("MaxSpeed is set for stepper_0: ");
+                    Serial1.println(justMovingSpeedStepper1);
+                    Serial1.print("Position is set for stepper_0: ");
+                    Serial1.println(stepperPositions[0]);
+                    break;
+                case VELOCITY_POSITION_STEPPER_1_DEV_ID:
+                    justMovingSpeedStepper2 = messageDataVelocity;
+                    stepperPositions[1] = messageDataPosition;
 
-            // a bit debug
-            Serial1.println("MaxSpeed is set");
-            Serial1.println("Position is set");
+                    // a bit debug
+                    Serial1.print("MaxSpeed is set for stepper_1: ");
+                    Serial1.println(justMovingSpeedStepper2);
+                    Serial1.print("Position is set for stepper_1: ");
+                    Serial1.println(stepperPositions[1]);
+                    break;
+            }
+
+            // send back received message, which confirm message getting.
+            msg.id = VELOCITY_POSITION_OK_ID;
+            can1.write(msg);
         } else if (DEVICE_CAN_ID == msg.id) {
             // send back received message, which confirm message getting.
             msg.id = ADDRESS_RECEIVE_OK_ID;
@@ -249,12 +265,13 @@ void loop() {
 
             switch (messageCode) {
                 case CODE_SET_SPEED:
-                    justMovingSpeed = messageData;
+                    justMovingSpeedStepper1 = messageData;
+                    justMovingSpeedStepper2 = messageData;
                     Serial1.println("MaxSpeed is set");
                     break;
                 case CODE_SET_ACCELERATION:
+                    stepper0.setAcceleration(messageData);
                     stepper1.setAcceleration(messageData);
-                    stepper2.setAcceleration(messageData);
                     Serial1.println("Acceleration is set");
                     break;
                 case CODE_SET_POSITION:
@@ -330,20 +347,20 @@ void loop() {
                     break;
                 case CODE_SET_GO_HOME:
                     // set homeMovingSpeed as a maximum speed for the steppers
+                    stepper0.setMaxSpeed(homeMovingSpeed);
                     stepper1.setMaxSpeed(homeMovingSpeed);
-                    stepper2.setMaxSpeed(homeMovingSpeed);
+                    stepper0.enableOutputs();
                     stepper1.enableOutputs();
-                    stepper2.enableOutputs();
 
                     // move while no stop flag enabled, for this look function stopTopContactISR()
                     isTopNotStopped = true;
-                    stepperPositions[0] = stepper1.currentPosition() + 100;
-                    stepperPositions[1] = stepper2.currentPosition() + 100;
+                    stepperPositions[0] = stepper0.currentPosition() + 100;
+                    stepperPositions[1] = stepper1.currentPosition() + 100;
                     steppers.moveTo(stepperPositions);
                     while (isTopNotStopped && steppers.run()) {
-                        if (abs(stepper1.targetPosition() - stepper1.currentPosition()) < 50) {
-                            stepperPositions[0] = stepper1.currentPosition() + 100;
-                            stepperPositions[1] = stepper2.currentPosition() + 100;
+                        if (abs(stepper0.targetPosition() - stepper0.currentPosition()) < 50) {
+                            stepperPositions[0] = stepper0.currentPosition() + 100;
+                            stepperPositions[1] = stepper1.currentPosition() + 100;
                             steppers.moveTo(stepperPositions);
                         }
                     }
@@ -351,32 +368,32 @@ void loop() {
 
                     // move while no stop flag disable, for this look function stopTopContactISR()
                     isTopNotStopped = true;
-                    stepperPositions[0] = stepper1.currentPosition() - 100;
-                    stepperPositions[1] = stepper2.currentPosition() - 100;
+                    stepperPositions[0] = stepper0.currentPosition() - 100;
+                    stepperPositions[1] = stepper1.currentPosition() - 100;
                     steppers.moveTo(stepperPositions);
                     while (isTopNotStopped && steppers.run()) {
-                        if (abs(stepper1.targetPosition() - stepper1.currentPosition()) < 50) {
-                            stepperPositions[0] = stepper1.currentPosition() - 100;
-                            stepperPositions[1] = stepper2.currentPosition() - 100;
+                        if (abs(stepper0.targetPosition() - stepper0.currentPosition()) < 50) {
+                            stepperPositions[0] = stepper0.currentPosition() - 100;
+                            stepperPositions[1] = stepper1.currentPosition() - 100;
                             steppers.moveTo(stepperPositions);
                         }
                     }
 
                     // move from the stop point on the offset
-                    stepperPositions[0] = stepper1.currentPosition() - homePositionOffset;
-                    stepperPositions[1] = stepper2.currentPosition() - homePositionOffset;
+                    stepperPositions[0] = stepper0.currentPosition() - homePositionOffset;
+                    stepperPositions[1] = stepper1.currentPosition() - homePositionOffset;
                     steppers.moveTo(stepperPositions);
                     while (steppers.run()) { ; }
+                    stepper0.disableOutputs();
                     stepper1.disableOutputs();
-                    stepper2.disableOutputs();
 
                     // return a new current position for the master device
                     msg.id = HOMING_RESULT_CAN_ID;
                     // set position
-                    msg.buf[0] = stepper1.currentPosition();
-                    msg.buf[1] = stepper1.currentPosition() >> 8;
-                    msg.buf[2] = stepper1.currentPosition() >> 16;
-                    msg.buf[3] = stepper1.currentPosition() >> 24;
+                    msg.buf[0] = stepper0.currentPosition();
+                    msg.buf[1] = stepper0.currentPosition() >> 8;
+                    msg.buf[2] = stepper0.currentPosition() >> 16;
+                    msg.buf[3] = stepper0.currentPosition() >> 24;
                     // set speed
                     msg.buf[4] = (int32_t) homeMovingSpeed;
                     msg.buf[5] = ((int32_t) homeMovingSpeed) >> 8;
@@ -392,17 +409,17 @@ void loop() {
 
         } else if (START_MOVING_ID == msg.id) {
             Serial1.println("Moving is START");
-            stepper1.setMaxSpeed(justMovingSpeed);
-            stepper2.setMaxSpeed(justMovingSpeed);
+            stepper0.setMaxSpeed(justMovingSpeedStepper1);
+            stepper1.setMaxSpeed(justMovingSpeedStepper2);
+            stepper0.enableOutputs();
             stepper1.enableOutputs();
-            stepper2.enableOutputs();
             steppers.moveTo(stepperPositions);
             bool isMoved = false;
             while (steppers.run()) {
                 isMoved = true;
             }
+            stepper0.disableOutputs();
             stepper1.disableOutputs();
-            stepper2.disableOutputs();
             msg.id = ADDRESS_RECEIVE_OK_ID;
             for (uint8_t i = 0; i < 8; i++) {
                 msg.buf[i] = 0x0;
