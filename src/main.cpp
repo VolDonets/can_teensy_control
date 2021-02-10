@@ -419,9 +419,15 @@ void loop() {
                     msg.buf[3] = 0x00;
                     msg.buf[4] = 0x00;
                     msg.buf[5] = 0x00;
-                    msg.buf[6] = (digitalRead(STOP_BOT_PIN) << 1) || digitalRead(STOP_TOP_PIN);
+                    msg.buf[6] = (digitalRead(STOP_BOT_PIN) << 1) + digitalRead(STOP_TOP_PIN);
                     msg.buf[7] = 0x00;
                     can1.write(msg);
+
+                    // a bit debug
+                    Serial1.print("Send values for the pin_11: ");
+                    Serial1.print(digitalRead(STOP_BOT_PIN), DEC);
+                    Serial1.print(", for the pin_12: ");
+                    Serial1.println(digitalRead(STOP_TOP_PIN));
                     break;
             }
 
