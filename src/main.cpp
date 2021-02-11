@@ -54,6 +54,7 @@ constexpr uint32_t CODE_SET_POSITION = 0x7A60;
 constexpr uint32_t CODE_SET_HOME_OFFSET = 0x7C60;
 constexpr uint32_t CODE_SET_HOME_SPEED = 0x9960;
 constexpr uint32_t CODE_SET_GO_HOME = 0x6060;
+constexpr uint32_t CODE_SET_HOT_END_TEMPERATURE = 0x0063;
 
 constexpr uint32_t MESSAGE_TYPE_REQUEST_CHANNEL_AD_DATA = 0x40;
 constexpr uint32_t MESSAGE_TYPE_RETURN_CHANNEL_AD_DATA = 0x43;
@@ -472,6 +473,20 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                 Serial1.print(digitalRead(STOP_BOT_PIN), DEC);
                 Serial1.print(", for the pin_12: ");
                 Serial1.println(digitalRead(STOP_TOP_PIN));
+                break;
+
+            case CODE_SET_HOT_END_TEMPERATURE:
+                //get by channel get and set aim temperature
+                switch (msgCAN.buf[4]) {
+                    case 0x00: // the 0s channel
+
+                        break;
+                    case 0x01: // the 1st channel
+
+                        break;
+                }
+
+
                 break;
         }
 
