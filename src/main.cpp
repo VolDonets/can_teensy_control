@@ -71,6 +71,7 @@ constexpr uint32_t MESSAGE_TYPE_REPORT = 0x43;
 
 constexpr uint8_t SET_MODE_CODE_SIMPLE_MODE = 0x00;
 constexpr uint8_t SET_MODE_CODE_HOMING = 0x01;
+constexpr uint8_t SET_MODE_CODE_SINGLE_Z_PROBE = 0x02;
 constexpr uint8_t SET_MODE_CODE_STOP_MOTION = 0x03;
 constexpr uint8_t SET_MODE_CODE_DISABLE_STEPPER = 0x10;
 constexpr uint8_t SET_MODE_CODE_ENABLE_STEPPER = 0x11;
@@ -431,6 +432,8 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                         isCANMessageAvailable = true;
                         // a bit debug
                         Serial1.println("Homing will be processed in the other thread");
+                        break;
+                    case SET_MODE_CODE_SINGLE_Z_PROBE:
                         break;
                     case SET_MODE_CODE_STOP_MOTION:
                         isNotStoppedByCAN = false;
