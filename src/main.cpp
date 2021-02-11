@@ -55,6 +55,7 @@ constexpr uint32_t CODE_SET_HOME_OFFSET = 0x7C60;
 constexpr uint32_t CODE_SET_HOME_SPEED = 0x9960;
 constexpr uint32_t CODE_SET_GO_HOME = 0x6060;
 constexpr uint32_t CODE_SET_HOT_END_TEMPERATURE = 0x0063;
+constexpr uint32_t CODE_GET_REPORT_TEMPERATURE = 0x0163;
 
 constexpr uint32_t MESSAGE_TYPE_REQUEST_CHANNEL_AD_DATA = 0x40;
 constexpr uint32_t MESSAGE_TYPE_RETURN_CHANNEL_AD_DATA = 0x43;
@@ -477,16 +478,34 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
 
             case CODE_SET_HOT_END_TEMPERATURE:
                 //get by channel get and set aim temperature
-                switch (msgCAN.buf[4]) {
+                switch (msgCAN.buf[3]) {
                     case 0x00: // the 0s channel
-
+                            // TODO how can I set the temperature
                         break;
                     case 0x01: // the 1st channel
-
+                            // TODO how can I set the temperature
                         break;
                 }
 
+                msgSend.id = ADDRESS_RECEIVE_OK_ID;
+                can1.write(msgSend);
 
+                // a bit debug
+                break;
+            case CODE_GET_REPORT_TEMPERATURE:
+                //get by channel and return current temperature
+                switch (msgCAN.buf[3]) {
+                    case 0x00: // the 0s channel
+                        // TODO how can I read the temperature
+                        break;
+                    case 0x01: // the 1st channel
+                        // TODO how can I read the temperature
+                        break;
+                }
+
+                msgSend.id = ADDRESS_RECEIVE_OK_ID;
+                can1.write(msgSend);
+                // a bit debug
                 break;
         }
 
