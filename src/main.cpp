@@ -99,6 +99,12 @@ float homeMovingSpeed = 200.0;
 bool isNotStoppedByCAN = true;
 bool isTopNotStopped;
 
+float hotEndTempHeater0;
+float hotEndTempHeater1;
+
+bool isNewPositionForStepper0 = false;
+bool isNewPositionForStepper1 = false;
+
 /// this is a debouncer, which prevent mechanical noise on stop-end activation
 Bounce debouncerTop = Bounce();
 Bounce debouncerBottom = Bounce();
@@ -164,6 +170,43 @@ void processHoming() {
 //    stepper1.disableOutputs();
 }
 
+void processSimpleMoving() {
+    Serial1.println("Moving is START");
+
+
+    // disable CAN stopping;
+    isNotStoppedByCAN = true;
+
+    stepper0.setMaxSpeed(justMovingSpeedStepper1);
+    stepper1.setMaxSpeed(justMovingSpeedStepper2);
+
+    stepper0.enableOutputs();
+    stepper1.enableOutputs();
+    steppers.moveTo(stepperPositions);
+    bool isMoved = false;
+    if (isNewPositionForStepper0 && isNewPositionForStepper1) {
+        while (isNotStoppedByCAN && steppers.run()) {
+            isMoved = true;
+        }
+    }
+//                stepper0.disableOutputs();
+//                stepper1.disableOutputs();
+    msg.id = ADDRESS_RECEIVE_OK_ID;
+    for (uint8_t i = 0; i < 8; i++) {
+        msg.buf[i] = 0x0;
+    }
+
+    if (isMoved) {
+        Serial1.println("Moving is DONE");
+        can1.write(msg);
+    } else {
+        Serial1.println("Moving is NOT HAPPEN");
+    }
+
+    isNewPositionForStepper0 = false;
+    isNewPositionForStepper1 = false;
+}
+
 void sendCurrentSteppersPosition(CAN_message_t &msgCAN) {
     // return a new current position for the master device
     msgCAN.id = HOMING_RESULT_CAN_ID;
@@ -205,32 +248,7 @@ void messageParseCANByThread() {
                         break;
                 }
             } else if (START_MOVING_ID == msg.id) {
-                Serial1.println("Moving is START");
-
-                // disable CAN stopping;
-                isNotStoppedByCAN = true;
-
-                stepper0.setMaxSpeed(justMovingSpeedStepper1);
-                stepper1.setMaxSpeed(justMovingSpeedStepper2);
-                stepper0.enableOutputs();
-                stepper1.enableOutputs();
-                steppers.moveTo(stepperPositions);
-                bool isMoved = false;
-                while (isNotStoppedByCAN && steppers.run()) {
-                    isMoved = true;
-                }
-//                stepper0.disableOutputs();
-//                stepper1.disableOutputs();
-                msg.id = ADDRESS_RECEIVE_OK_ID;
-                for (uint8_t i = 0; i < 8; i++) {
-                    msg.buf[i] = 0x0;
-                }
-                if (isMoved) {
-                    Serial1.println("Moving is DONE");
-                    can1.write(msg);
-                } else {
-                    Serial1.println("Moving is NOT HAPPEN");
-                }
+                processSimpleMoving();
             }
 
             isCANMessageAvailable = false;
@@ -248,25 +266,30 @@ void copyCANMessage(const CAN_message_t &msgCAN) {
 void canMessagesSniff(const CAN_message_t &msgCAN) {
     CAN_message_t msgSend;
 
-    Serial1.print("CAN1 ");
-    Serial1.print("MB: ");
-    Serial1.print(msgCAN.mb, HEX);
-    Serial1.print("  ID: 0x");
-    Serial1.print(msgCAN.id, HEX);
-    Serial1.print("  EXT: ");
-    Serial1.print(msgCAN.flags.extended, HEX);
-    Serial1.print("  LEN: ");
-    Serial1.print(msgCAN.len, HEX);
-    Serial1.print(" DATA: ");
-
+    if (msgCAN.id != 0x080) {
+        Serial1.print("CAN1 ");
+        Serial1.print("MB: ");
+        Serial1.print(msgCAN.mb, HEX);
+        Serial1.print("  ID: 0x");
+        Serial1.print(msgCAN.id, HEX);
+        Serial1.print("  EXT: ");
+        Serial1.print(msgCAN.flags.extended, HEX);
+        Serial1.print("  LEN: ");
+        Serial1.print(msgCAN.len, HEX);
+        Serial1.print(" DATA: ");
+    }
     msgSend.id = msgCAN.id;
     for (uint8_t i = 0; i < 8; i++) {
-        Serial1.print(msgCAN.buf[i], HEX);
-        Serial1.print(" ");
+        if (msgCAN.id != 0x080) {
+            Serial1.print(msgCAN.buf[i], HEX);
+            Serial1.print(" ");
+        }
         msgSend.buf[i] = msgCAN.buf[i];
     }
-    Serial1.print("  TS: ");
-    Serial1.println(msgCAN.timestamp);
+    if (msgCAN.id != 0x080) {
+        Serial1.print("  TS: ");
+        Serial1.println(msgCAN.timestamp);
+    }
 
 
     if ((VELOCITY_POSITION_STEPPER_0_DEV_ID == msgCAN.id)
@@ -288,6 +311,7 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
             case VELOCITY_POSITION_STEPPER_0_DEV_ID:
                 justMovingSpeedStepper1 = messageDataVelocity;
                 stepperPositions[0] = messageDataPosition;
+                isNewPositionForStepper0 = true;
 
                 // a bit debug
                 Serial1.print("MaxSpeed is set for stepper_0: ");
@@ -298,6 +322,7 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
             case VELOCITY_POSITION_STEPPER_1_DEV_ID:
                 justMovingSpeedStepper2 = messageDataVelocity;
                 stepperPositions[1] = messageDataPosition;
+                isNewPositionForStepper1 = true;
 
                 // a bit debug
                 Serial1.print("MaxSpeed is set for stepper_1: ");
@@ -353,6 +378,8 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
             case CODE_SET_POSITION:
                 stepperPositions[0] = messageData;
                 stepperPositions[1] = messageData;
+                isNewPositionForStepper0 = true;
+                isNewPositionForStepper1 = true;
                 Serial1.println("Position is set");
                 break;
             case CODE_CHANNEL_AD:
@@ -480,10 +507,10 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                 //get by channel get and set aim temperature
                 switch (msgCAN.buf[3]) {
                     case 0x00: // the 0s channel
-                            // TODO how can I set the temperature
+                        // TODO how can I set the temperature
                         break;
                     case 0x01: // the 1st channel
-                            // TODO how can I set the temperature
+                        // TODO how can I set the temperature
                         break;
                 }
 
@@ -511,8 +538,10 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
 
     } else if (START_MOVING_ID == msgCAN.id) {
         // send for processing it in other thread
-        copyCANMessage(msgCAN);
-        isCANMessageAvailable = true;
+        if (isNewPositionForStepper0 && isNewPositionForStepper1) {
+            copyCANMessage(msgCAN);
+            isCANMessageAvailable = true;
+        }
     }
 
 }
