@@ -507,10 +507,10 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                 //get by channel get and set aim temperature
                 switch (msgCAN.buf[3]) {
                     case 0x00: // the 0s channel
-                        // TODO how can I set the temperature
+                        hotEndTempHeater0 = messageData;
                         break;
                     case 0x01: // the 1st channel
-                        // TODO how can I set the temperature
+                        hotEndTempHeater1 = messageData;
                         break;
                 }
 
@@ -518,6 +518,17 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                 can1.write(msgSend);
 
                 // a bit debug
+                Serial1.print("Set HOT_END_TEMP for heater");
+                Serial1.print(msgCAN.buf[3], HEX);
+                Serial1.print(": temp=");
+                switch (msgCAN.buf[3]) {
+                    case 0x00: // the 0s channel
+                        Serial1.println(hotEndTempHeater0, DEC);
+                        break;
+                    case 0x01: // the 1st channel
+                        Serial1.println(hotEndTempHeater1, DEC);
+                        break;
+                }
                 break;
             case CODE_GET_REPORT_TEMPERATURE:
                 //get by channel and return current temperature
