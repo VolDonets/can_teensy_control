@@ -534,16 +534,26 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                 //get by channel and return current temperature
                 switch (msgCAN.buf[3]) {
                     case 0x00: // the 0s channel
-                        // TODO how can I read the temperature
+                        adData = adsVDD.readADC_Differential_0_1();
                         break;
                     case 0x01: // the 1st channel
-                        // TODO how can I read the temperature
+                        adData = adsVDD.readADC_Differential_2_3();
                         break;
                 }
 
                 msgSend.id = ADDRESS_RECEIVE_OK_ID;
+                msgSend.buf[0] = MESSAGE_TYPE_RETURN_CHANNEL_AD_DATA;
+                msgSend.buf[4] = adData;
+                msgSend.buf[5] = adData >> 8;
+                msgSend.buf[6] = 0x0;
+                msgSend.buf[7] = 0x0;
                 can1.write(msgSend);
+
                 // a bit debug
+                Serial1.print("Read temperature for sensor");
+                Serial1.print(msgCAN.buf[3], HEX);
+                Serial1.print(": tmp=");
+                Serial1.println(adData);
                 break;
         }
 
