@@ -532,6 +532,8 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                 break;
             case CODE_GET_REPORT_TEMPERATURE:
                 //get by channel and return current temperature
+                // TODO need to fix temperature source sensor
+                // TODO need to parse data from sensors
                 switch (msgCAN.buf[3]) {
                     case 0x00: // the 0s channel
                         adData = adsVDD.readADC_Differential_0_1();
