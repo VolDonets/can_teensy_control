@@ -8,6 +8,7 @@
 #include <Adafruit_ADS1015.h>
 #include <Bounce2.h>
 #include <TeensyThreads.h>
+#include <PID_v1.h>
 
 /// BOARD ID value (it determines an board address in CAN bus)
 constexpr int8_t BOARD_ID = 0x0;
@@ -108,6 +109,13 @@ bool isNewPositionForStepper1 = false;
 /// this is a debouncer, which prevent mechanical noise on stop-end activation
 Bounce debouncerTop = Bounce();
 Bounce debouncerBottom = Bounce();
+
+/// PID controller for the heater0 and it's params
+double setpointPIDHeater0;
+double inputPIDHeater0;
+double outputPIDHeater0;
+double kpPID0 = 2.0, kiPID0 = 5.0, kdPID0 = 1;
+PID heaterPID0(&inputPIDHeater0, &outputPIDHeater0, &setpointPIDHeater0, kpPID0, kiPID0, kdPID0, DIRECT);
 
 void stopTopContactISR() {
     debouncerTop.update();
@@ -253,6 +261,15 @@ void messageParseCANByThread() {
 
             isCANMessageAvailable = false;
         }
+    }
+}
+
+[[noreturn]]
+void heater0PIDControllerThread() {
+    while (true) {
+        inputPIDHeater0 = adsVDD.readADC_Differential_0_1();
+        heaterPID0.Compute();
+        analogWrite(PWM_PIN0, outputPIDHeater0);
     }
 }
 
@@ -651,6 +668,13 @@ void setup() {
     // start independent thread for the CAN1 processing
     std::thread th1(messageParseCANByThread);
     th1.detach();
+
+    //initialize the PID variables and turn on the heater0 PID
+    inputPIDHeater0 = 0;
+    setpointPIDHeater0 = 100;
+    heaterPID0.SetMode(AUTOMATIC);
+    std::thread th2(heater0PIDControllerThread);
+    th2.detach();
 }
 
 void loop() {
