@@ -9,6 +9,8 @@
 
 #define LED 13
 
+#define PIN_FAN 14
+
 #define STEPPER2_DIR_PIN 10
 #define STEPPER2_STEP_PIN 9
 
@@ -29,6 +31,10 @@ constexpr uint32_t SUB_REGISTER_ADDRESS = 0x00;
 constexpr uint32_t CODE_SET_SPEED = 0x8160;
 constexpr uint32_t CODE_SET_ACCELERATION = 0x8360;
 constexpr uint32_t CODE_SET_POSITION = 0x7A60;
+constexpr uint32_t CODE_SET_FAN_SPEED = 0x8083;
+
+constexpr uint32_t RESOLUTION_PWM_BYTE = 2;
+constexpr float RESOLUTION_PWM_BIT = 32767.0;
 
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> can1;
 CAN_message_t msg;
@@ -40,6 +46,18 @@ long stepperPositions[1];
 void setup() {
     // enable LED indication
     pinMode(LED, OUTPUT);
+
+    // enable PWM for fan
+    pinMode(PIN_FAN, OUTPUT);
+
+    // set initial frequency for 1kHz for the FAN
+    analogWriteFrequency(PIN_FAN, 1000);
+
+    // set initial resolution for PWM pins
+    analogWriteResolution(15);
+
+    // set initial value for FAN speed
+    analogWrite(PIN_FAN, 0);
 
     // enable stepper pins
     pinMode(STEPPER2_DIR_PIN, OUTPUT);
@@ -149,6 +167,16 @@ void loop() {
                 case CODE_SET_POSITION:
                     stepperPositions[0] = messageData;
                     Serial1.println("Position is set");
+                    break;
+                case CODE_SET_FAN_SPEED: {
+                    float pwmValue = ((float) messageData) / 255.0;
+                    pwmValue = (pwmValue * RESOLUTION_PWM_BIT) / 100.0;
+                    analogWrite(PIN_FAN, pwmValue);
+
+                    // a bit debug
+                    Serial1.print("Set speed for FAN: val=");
+                    Serial1.println(pwmValue);
+                }
                     break;
             }
 
