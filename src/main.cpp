@@ -38,6 +38,9 @@ constexpr int8_t BOARD_ID = 0x0;
 #define PWM_PIN2 2
 #define PWM_PIN3 3
 
+#define PIN_FAN1 2
+#define PIN_FAN2 3
+
 constexpr uint32_t DEVICE_CAN_ID = 0x640 + BOARD_ID;
 constexpr uint32_t START_MOVING_ID = 0x080;
 constexpr uint32_t ADDRESS_RECEIVE_OK_ID = 0x5C0 + BOARD_ID;
@@ -57,6 +60,7 @@ constexpr uint32_t CODE_SET_HOME_SPEED = 0x9960;
 constexpr uint32_t CODE_SET_GO_HOME = 0x6060;
 constexpr uint32_t CODE_SET_HOT_END_TEMPERATURE = 0x0063;
 constexpr uint32_t CODE_GET_REPORT_TEMPERATURE = 0x0163;
+constexpr uint32_t CODE_SET_FAN_SPEED = 0x8083;
 
 constexpr uint32_t MESSAGE_TYPE_REQUEST_CHANNEL_AD_DATA = 0x40;
 constexpr uint32_t MESSAGE_TYPE_RETURN_CHANNEL_AD_DATA = 0x43;
@@ -574,6 +578,26 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                 Serial1.print(": tmp=");
                 Serial1.println(adData);
                 break;
+
+            case CODE_SET_FAN_SPEED:
+                // warning fan speed sets from 0 to 255
+                pwmValue = ((float) messageData) / 255.0;
+                pwmValue = (pwmValue * RESOLUTION_PWM_BIT) / 100.0;
+                switch (msgCAN.buf[3]) {
+                    case 0x00: // setting fan speed for the fan1
+                        analogWrite(PIN_FAN1, pwmValue);
+                        break;
+                    case 0x01: // setting fan speed for the fan2
+                        analogWrite(PIN_FAN2, pwmValue);
+                        break;
+                }
+
+                // a bit debug
+                Serial1.print("Set speed for FAN:");
+                Serial1.print(msgCAN.buf[3] + 1, HEX);
+                Serial1.print(": val=");
+                Serial1.println(pwmValue);
+                break;
         }
 
     } else if (START_MOVING_ID == msgCAN.id) {
@@ -595,6 +619,9 @@ void setup() {
     pinMode(PWM_PIN1, OUTPUT);
     pinMode(PWM_PIN2, OUTPUT);
     pinMode(PWM_PIN3, OUTPUT);
+    // enable PWM for fan1 and fan2 pins
+    pinMode(PIN_FAN1, OUTPUT);
+    pinMode(PIN_FAN2, OUTPUT);
 
     // enable stepper pins
     pinMode(STEPPER1_DIR_PIN, OUTPUT);
@@ -641,9 +668,16 @@ void setup() {
     analogWriteFrequency(PWM_PIN1, 1000);
     analogWriteFrequency(PWM_PIN2, 1000);
     analogWriteFrequency(PWM_PIN3, 1000);
+    // also set initial frequency 1kHz for the FAN1, and FAN2 pins.
+    analogWriteFrequency(PIN_FAN1, 1000);
+    analogWriteFrequency(PIN_FAN2, 1000);
 
     // set initial resolution for PWM pins
     analogWriteResolution(15);
+
+    // set initial value for speed.
+    analogWrite(PIN_FAN1, 0);
+    analogWrite(PIN_FAN2, 0);
 
     // add stop contacts
     // Attach the debouncer to a pin with INPUT_PULLUP mode
@@ -671,7 +705,7 @@ void setup() {
 
     //initialize the PID variables and turn on the heater0 PID
     inputPIDHeater0 = 0;
-    setpointPIDHeater0 = 100;
+    setpointPIDHeater0 = 0;
     heaterPID0.SetMode(AUTOMATIC);
     std::thread th2(heater0PIDControllerThread);
     th2.detach();
