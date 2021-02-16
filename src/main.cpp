@@ -41,6 +41,9 @@ constexpr int8_t BOARD_ID = 0x0;
 #define PIN_FAN1 2
 #define PIN_FAN2 3
 
+//#define ADC_CS1_ALERT_PIN 16
+//#define ADC_CS2_ALERT_PIN 17
+
 constexpr uint32_t DEVICE_CAN_ID = 0x640 + BOARD_ID;
 constexpr uint32_t START_MOVING_ID = 0x080;
 constexpr uint32_t ADDRESS_RECEIVE_OK_ID = 0x5C0 + BOARD_ID;
@@ -83,6 +86,14 @@ constexpr uint8_t SET_MODE_CODE_STOP_MOTION = 0x03;
 constexpr uint8_t SET_MODE_CODE_DISABLE_STEPPER = 0x10;
 constexpr uint8_t SET_MODE_CODE_ENABLE_STEPPER = 0x11;
 
+// // ADC Range: +/- 6.144V (1 bit = 3mV)
+// // EXAMPLE Comparator for ADC_CS1 Threshold: 1000 (3.000V)
+// // Comparator for ADC_CS1 Threshold: 166 (0.500V)
+//constexpr int16_t ADC_CS1_THRESHOLD_LEVEL = 17600;
+// // EXAMPLE Comparator for ADC_CS2 Threshold: 1000 (3.000V)
+// // Comparator for ADC_CS2 Threshold: 166 (0.500V)
+//constexpr int16_t ADC_CS2_THRESHOLD_LEVEL = 17600;
+
 
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> can1;
 CAN_message_t msg;
@@ -112,6 +123,7 @@ bool isNewPositionForStepper1 = false;
 
 /// this is a debouncer, which prevent mechanical noise on stop-end activation
 Bounce debouncerTop = Bounce();
+/// this is a debouncer, which prevent mechanical noise on stop-end activation
 Bounce debouncerBottom = Bounce();
 
 /// PID controller for the heater0 and it's params
@@ -135,6 +147,14 @@ void stopTopContactISR() {
 void stopBottomContactISR() {
 
 }
+
+//void onLeverExceedingADC_CS1() {
+//    Serial1.println("Level is exceeding for ADC CS_1");
+//}
+//
+//void onLeverExceedingADC_CS2() {
+//    Serial1.println("Level is exceeding for ADC CS_2");
+//}
 
 void processHoming() {
     // disable CAN stopping;
@@ -610,6 +630,21 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
 
 }
 
+//[[noreturn]]
+//void leverPrinterThread() {
+//    while (true) {
+//        Serial1.print("adsVDD: ");
+// //        Serial1.print("sg_0=");
+// //        Serial1.print(adsVDD.readADC_SingleEnded(0), DEC);
+//        Serial1.print(", sg_1=");
+//        Serial1.println(adsVDD.readADC_SingleEnded(1), DEC);
+// //        Serial1.print(", sg_2=");
+// //        Serial1.print(adsVDD.readADC_SingleEnded(2), DEC);
+// //        Serial1.print(", sg_3=");
+// //        Serial1.println(adsVDD.readADC_SingleEnded(3), DEC);
+//    }
+//}
+
 void setup() {
     // enable LED indication
     pinMode(LED, OUTPUT);
@@ -689,6 +724,15 @@ void setup() {
     debouncerBottom.interval(STOP_TOP_DEBOUNCE);
     attachInterrupt(STOP_TOP_PIN, stopTopContactISR, CHANGE);
 
+//    // Attach the interrupt to a pin with ADC_CS1 status and set level for interrupting
+//    pinMode(ADC_CS1_ALERT_PIN, INPUT_PULLUP);
+//    adsGND.startComparator_SingleEnded(1, ADC_CS1_THRESHOLD_LEVEL);
+//    attachInterrupt(ADC_CS1_ALERT_PIN, onLeverExceedingADC_CS1, CHANGE);
+//    // Attach the interrupt to a pin with ADC_CS2 status and set level for interrupting
+//    pinMode(ADC_CS2_ALERT_PIN, INPUT_PULLUP);
+//    adsVDD.startComparator_SingleEnded(1, ADC_CS2_THRESHOLD_LEVEL);
+//    attachInterrupt(ADC_CS2_ALERT_PIN, onLeverExceedingADC_CS2, CHANGE);
+
     // start serial1 ports
     Serial1.begin(115200);
 
@@ -709,6 +753,9 @@ void setup() {
     heaterPID0.SetMode(AUTOMATIC);
     std::thread th2(heater0PIDControllerThread);
     th2.detach();
+
+//    std::thread th3(leverPrinterThread);
+//    th3.detach();
 }
 
 void loop() {
