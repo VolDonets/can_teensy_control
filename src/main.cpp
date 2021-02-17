@@ -52,8 +52,9 @@ constexpr uint32_t VELOCITY_POSITION_STEPPER_1_DEV_ID = 0x441;
 constexpr uint32_t VELOCITY_POSITION_OK_ID = 0x3C0;
 constexpr uint32_t HOMING_RESULT_CAN_ID = 0x3C0;
 
-constexpr uint32_t MESSAGE_TYPE_STEPPER_MOVING = 0x23;
-constexpr uint32_t SUB_REGISTER_ADDRESS = 0x00;
+constexpr uint32_t MESSAGE_TYPE_SET = 0x23;
+constexpr uint32_t MESSAGE_TYPE_REQUEST = 0x40;
+constexpr uint32_t MESSAGE_TYPE_REPORT = 0x43;
 
 constexpr uint32_t CODE_SET_SPEED = 0x8160;
 constexpr uint32_t CODE_SET_ACCELERATION = 0x8360;
@@ -76,8 +77,7 @@ constexpr uint32_t RESOLUTION_PWM_BYTE = 2;
 constexpr float RESOLUTION_PWM_BIT = 32767.0;
 
 constexpr uint32_t CODE_GET_ENDSTOP_STATES = 0xFD60;
-constexpr uint32_t MESSAGE_TYPE_REQUEST = 0x40;
-constexpr uint32_t MESSAGE_TYPE_REPORT = 0x43;
+
 
 constexpr uint8_t SET_MODE_CODE_SIMPLE_MODE = 0x00;
 constexpr uint8_t SET_MODE_CODE_HOMING = 0x01;
@@ -85,6 +85,7 @@ constexpr uint8_t SET_MODE_CODE_SINGLE_Z_PROBE = 0x02;
 constexpr uint8_t SET_MODE_CODE_STOP_MOTION = 0x03;
 constexpr uint8_t SET_MODE_CODE_DISABLE_STEPPER = 0x10;
 constexpr uint8_t SET_MODE_CODE_ENABLE_STEPPER = 0x11;
+
 
 // // ADC Range: +/- 6.144V (1 bit = 3mV)
 // // EXAMPLE Comparator for ADC_CS1 Threshold: 1000 (3.000V)
@@ -132,6 +133,13 @@ double inputPIDHeater0;
 double outputPIDHeater0;
 double kpPID0 = 2.0, kiPID0 = 5.0, kdPID0 = 1;
 PID heaterPID0(&inputPIDHeater0, &outputPIDHeater0, &setpointPIDHeater0, kpPID0, kiPID0, kdPID0, DIRECT);
+
+/// PID controller for the heater1 and it's params
+double setpointPIDHeater1;
+double inputPIDHeater1;
+double outputPIDHeater1;
+double kpPID1 = 2.0, kiPID1 = 5.0, kdPID1 = 1;
+PID heaterPID1(&inputPIDHeater1, &outputPIDHeater1, &setpointPIDHeater1, kpPID1, kiPID1, kdPID1, DIRECT);
 
 void stopTopContactISR() {
     debouncerTop.update();
