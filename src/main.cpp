@@ -379,10 +379,6 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
     } else if (DEVICE_CAN_ID == msgCAN.id) {
         // send back received message, which confirm message getting.
         msgSend.id = ADDRESS_RECEIVE_OK_ID;
-        // it doesn't send back the same message if it works with channels
-        if (MESSAGE_TYPE_REQUEST_CHANNEL_AD_DATA != msgCAN.buf[0]) {
-            can1.write(msgSend);
-        }
 
         // get message code type
         uint32_t messageCode = msgCAN.buf[1] << 8;
@@ -409,11 +405,21 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
             case CODE_SET_SPEED:
                 justMovingSpeedStepper1 = messageData;
                 justMovingSpeedStepper2 = messageData;
+
+                // send confirmation message back by CAN
+                can1.write(msgSend);
+
+                // a bit debug
                 Serial1.println("MaxSpeed is set");
                 break;
             case CODE_SET_ACCELERATION:
                 stepper0.setAcceleration(messageData);
                 stepper1.setAcceleration(messageData);
+
+                // send confirmation message back by CAN
+                can1.write(msgSend);
+
+                // a bit debug
                 Serial1.println("Acceleration is set");
                 break;
             case CODE_SET_POSITION:
@@ -421,6 +427,11 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                 stepperPositions[1] = messageData;
                 isNewPositionForStepper0 = true;
                 isNewPositionForStepper1 = true;
+
+                // send confirmation message back by CAN
+                can1.write(msgSend);
+
+                // a bit debug
                 Serial1.println("Position is set");
                 break;
             case CODE_CHANNEL_AD:
@@ -440,6 +451,7 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                         break;
                 }
 
+                // send confirmation message back by CAN
                 msgSend.buf[0] = MESSAGE_TYPE_RETURN_CHANNEL_AD_DATA;
                 msgSend.buf[4] = adData;
                 msgSend.buf[5] = adData >> 8;
@@ -471,6 +483,9 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                         break;
                 }
 
+                // send confirmation message back by CAN
+                can1.write(msgSend);
+
                 // a bit debug messages to Serial1
                 Serial1.print("set PWM for PIN:");
                 Serial1.println();
@@ -478,12 +493,18 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
             case CODE_SET_HOME_OFFSET:
                 homePositionOffset = messageData;
 
+                // send confirmation message back by CAN
+                can1.write(msgSend);
+
                 // a bit debug messages to Serial1
                 Serial1.print("Offset near home position: ");
                 Serial1.println(homePositionOffset, DEC);
                 break;
             case CODE_SET_HOME_SPEED:
                 homeMovingSpeed = messageData;
+
+                // send confirmation message back by CAN
+                can1.write(msgSend);
 
                 // a bit debug messages to Serial1
                 Serial1.print("Moving speed to home: ");
@@ -494,6 +515,7 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                 switch (msgCAN.buf[4]) {
                     case SET_MODE_CODE_SIMPLE_MODE:
 
+                        // send message with data
                         sendCurrentSteppersPosition(msgSend);
                         break;
                     case SET_MODE_CODE_HOMING:
@@ -504,13 +526,23 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                         Serial1.println("Homing will be processed in the other thread");
                         break;
                     case SET_MODE_CODE_SINGLE_Z_PROBE:
+                        // TODO in the future here should be a code
+
+                        // send confirmation message back by CAN
+                        can1.write(msgSend);
+
                         break;
                     case SET_MODE_CODE_STOP_MOTION:
                         isNotStoppedByCAN = false;
+                        // send confirmation message back by CAN
+                        can1.write(msgSend);
+                        // an answer will be after ending moving
                         break;
                     case SET_MODE_CODE_DISABLE_STEPPER:
                         stepper0.disableOutputs();
                         stepper1.disableOutputs();
+
+                        // send message with data
                         sendCurrentSteppersPosition(msgSend);
 
                         // a bit debug messages:
@@ -519,6 +551,8 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                     case SET_MODE_CODE_ENABLE_STEPPER:
                         stepper0.enableOutputs();
                         stepper1.enableOutputs();
+
+                        // send message with data
                         sendCurrentSteppersPosition(msgSend);
 
                         // a bit debug messages:
@@ -528,6 +562,7 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                 break;
             case CODE_GET_ENDSTOP_STATES:
                 // prepare a report message and read current PINs states
+                // and send message with data by CAN
                 msgSend.id = ADDRESS_RECEIVE_OK_ID;
                 msgSend.buf[0] = MESSAGE_TYPE_REPORT;
                 msgSend.buf[3] = 0x00;
@@ -555,7 +590,7 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                         break;
                 }
 
-                msgSend.id = ADDRESS_RECEIVE_OK_ID;
+                // send confirmation message back by CAN
                 can1.write(msgSend);
 
                 // a bit debug
@@ -584,6 +619,7 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                         break;
                 }
 
+                // send confirmation message back by CAN
                 msgSend.id = ADDRESS_RECEIVE_OK_ID;
                 msgSend.buf[0] = MESSAGE_TYPE_RETURN_CHANNEL_AD_DATA;
                 msgSend.buf[4] = adData;
@@ -611,6 +647,9 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                         analogWrite(PIN_FAN2, pwmValue);
                         break;
                 }
+
+                // send confirmation message back by CAN
+                can1.write(msgSend);
 
                 // a bit debug
                 Serial1.print("Set speed for FAN:");
