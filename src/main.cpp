@@ -669,7 +669,7 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
             case CODE_SET_FAN_SPEED:
                 // warning fan speed sets from 0 to 255
                 pwmValue = ((float) messageData) / 255.0;
-                pwmValue = (pwmValue * RESOLUTION_PWM_BIT) / 100.0;
+                pwmValue = (pwmValue * RESOLUTION_PWM_BIT);
                 switch (msgCAN.buf[3]) {
                     case 0x00: // setting fan speed for the fan1
                         analogWrite(PIN_FAN1, pwmValue);
