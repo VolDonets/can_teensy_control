@@ -86,6 +86,13 @@ constexpr uint8_t SET_MODE_CODE_STOP_MOTION = 0x03;
 constexpr uint8_t SET_MODE_CODE_DISABLE_STEPPER = 0x10;
 constexpr uint8_t SET_MODE_CODE_ENABLE_STEPPER = 0x11;
 
+constexpr uint32_t CODE_SET_GET_PID_P = 0x5F5A;
+constexpr uint32_t CODE_SET_GET_PID_I = 0x5F5B;
+constexpr uint32_t CODE_SET_GET_PID_D = 0x5F5C;
+
+/// this constant are multiplicate (when send it) PID params or divide (when recive it)
+constexpr double MULT_PID_CONST = 1000.0;
+
 
 // // ADC Range: +/- 6.144V (1 bit = 3mV)
 // // EXAMPLE Comparator for ADC_CS1 Threshold: 1000 (3.000V)
@@ -310,6 +317,19 @@ void copyCANMessage(const CAN_message_t &msgCAN) {
     for (uint8_t i = 0; i < 8; i++) {
         msg.buf[i] = msgCAN.buf[i];
     }
+}
+
+double parseParamPID(const uint32_t &messageData) {
+    return ((double) messageData) / MULT_PID_CONST;
+}
+
+void prepareResponseMessageParamPID(CAN_message_t &msgSend, const double &pidCoef) {
+    uint32_t dataForSending = (uint32_t) (pidCoef * MULT_PID_CONST);
+    msgSend.buf[0] = MESSAGE_TYPE_REPORT;
+    msgSend.buf[4] = dataForSending;
+    msgSend.buf[5] = dataForSending >> 8;
+    msgSend.buf[6] = dataForSending >> 16;
+    msgSend.buf[7] = dataForSending >> 24;
 }
 
 void canMessagesSniff(const CAN_message_t &msgCAN) {
@@ -664,6 +684,135 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                 Serial1.print(msgCAN.buf[3] + 1, HEX);
                 Serial1.print(": val=");
                 Serial1.println(pwmValue);
+                break;
+            case CODE_SET_GET_PID_P:
+                switch (msgCAN.buf[0]) {
+                    case MESSAGE_TYPE_SET:
+                        // set values
+                        switch (msgCAN.buf[3]) {
+                            case 0x00: // set P value for PID of heater 0
+                                kpPID0 = parseParamPID(messageData);
+
+                                // a bit debug messages to serial
+                                Serial1.print("set heater_0 kP=");
+                                Serial1.println(kpPID0);
+                                break;
+                            case 0x01: // set P value for PID of heater 1
+                                kpPID1 = parseParamPID(messageData);
+
+                                // a bit debug messages to serial
+                                Serial1.print("set heater_1 kP=");
+                                Serial1.println(kpPID1);
+                                break;
+                        }
+
+                        // sent confirmation message via CAN
+                        can1.write(msgSend);
+                        break;
+                    case MESSAGE_TYPE_REQUEST:
+                        switch (msgCAN.buf[3]) {
+                            case 0x00: // get P value for PID of heater 0
+                                prepareResponseMessageParamPID(msgSend, kpPID0);
+                                break;
+                            case 0x01: // get P value for PID of heater 1
+                                prepareResponseMessageParamPID(msgSend, kpPID1);
+                                break;
+                        }
+
+                        // sent confirmation message via CAN with data
+                        can1.write(msgSend);
+
+                        // a bit debug messages to serial
+                        Serial1.print("Send P value heater_");
+                        Serial1.println(msgCAN.buf[3]);
+                        break;
+                }
+                break;
+            case CODE_SET_GET_PID_I:
+                switch (msgCAN.buf[0]) {
+                    case MESSAGE_TYPE_SET:
+                        // set values
+                        switch (msgCAN.buf[3]) {
+                            case 0x00: // set I value for PID of heater 0
+                                kiPID0 = parseParamPID(messageData);
+
+                                // a bit debug messages to serial
+                                Serial1.print("set heater_0 kI=");
+                                Serial1.println(kiPID0);
+                                break;
+                            case 0x01: // set I value for PID of heater 1
+                                kiPID1 = parseParamPID(messageData);
+
+                                // a bit debug messages to serial
+                                Serial1.print("set heater_1 kI=");
+                                Serial1.println(kiPID1);
+                                break;
+                        }
+
+                        // sent confirmation message via CAN
+                        can1.write(msgSend);
+                        break;
+                    case MESSAGE_TYPE_REQUEST:
+                        switch (msgCAN.buf[3]) {
+                            case 0x00: // get I value for PID of heater 0
+                                prepareResponseMessageParamPID(msgSend, kiPID0);
+                                break;
+                            case 0x01: // get I value for PID of heater 1
+                                prepareResponseMessageParamPID(msgSend, kiPID1);
+                                break;
+                        }
+
+                        // sent confirmation message via CAN with data
+                        can1.write(msgSend);
+
+                        // a bit debug messages to serial
+                        Serial1.print("Send I value heater_");
+                        Serial1.println(msgCAN.buf[3]);
+                        break;
+                }
+                break;
+            case CODE_SET_GET_PID_D:
+                switch (msgCAN.buf[0]) {
+                    case MESSAGE_TYPE_SET:
+                        // set values
+                        switch (msgCAN.buf[3]) {
+                            case 0x00: // set D value for PID of heater 0
+                                kdPID0 = parseParamPID(messageData);
+
+                                // a bit debug messages to serial
+                                Serial1.print("set heater_0 kD=");
+                                Serial1.println(kdPID0);
+                                break;
+                            case 0x01: // set D value for PID of heater 1
+                                kdPID1 = parseParamPID(messageData);
+
+                                // a bit debug messages to serial
+                                Serial1.print("set heater_1 kD=");
+                                Serial1.println(kdPID1);
+                                break;
+                        }
+
+                        // sent confirmation message via CAN
+                        can1.write(msgSend);
+                        break;
+                    case MESSAGE_TYPE_REQUEST:
+                        switch (msgCAN.buf[3]) {
+                            case 0x00: // get D value for PID of heater 0
+                                prepareResponseMessageParamPID(msgSend, kdPID0);
+                                break;
+                            case 0x01: // get D value for PID of heater 1
+                                prepareResponseMessageParamPID(msgSend, kdPID1);
+                                break;
+                        }
+
+                        // sent confirmation message via CAN with data
+                        can1.write(msgSend);
+
+                        // a bit debug messages to serial
+                        Serial1.print("Send D value heater_");
+                        Serial1.println(msgCAN.buf[3]);
+                        break;
+                }
                 break;
         }
 
