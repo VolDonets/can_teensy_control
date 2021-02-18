@@ -325,7 +325,9 @@ double parseParamPID(const uint32_t &messageData) {
 }
 
 void prepareResponseMessageParamPID(CAN_message_t &msgSend, const double &pidCoef) {
-    uint32_t dataForSending = (uint32_t) (pidCoef * MULT_PID_CONST);
+    double dataForSendingDouble = pidCoef * MULT_PID_CONST;
+    int32_t dataForSendingInt = dataForSendingDouble;
+    uint32_t dataForSending = dataForSendingInt;
     msgSend.buf[0] = MESSAGE_TYPE_REPORT;
     msgSend.buf[4] = dataForSending;
     msgSend.buf[5] = dataForSending >> 8;
