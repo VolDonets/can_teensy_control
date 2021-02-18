@@ -320,7 +320,8 @@ void copyCANMessage(const CAN_message_t &msgCAN) {
 }
 
 double parseParamPID(const uint32_t &messageData) {
-    return ((double) messageData) / MULT_PID_CONST;
+    int32_t signedMessageData = messageData;
+    return ((double) signedMessageData) / MULT_PID_CONST;
 }
 
 void prepareResponseMessageParamPID(CAN_message_t &msgSend, const double &pidCoef) {
