@@ -93,6 +93,10 @@ constexpr uint32_t CODE_SET_GET_PID_D = 0x5F5C;
 /// this constant are multiplicate (when send it) PID params or divide (when recive it)
 constexpr double MULT_PID_CONST = 1000.0;
 
+constexpr uint32_t CODE_SET_PIN_MODE_INPUT = 0x3E3A;
+constexpr uint32_t CODE_SET_PIN_MODE_OUTPUT = 0x3E3B;
+constexpr uint32_t CODE_SET_PIN_MODE_INPUT_PULLUP = 0x3E3C;
+constexpr uint32_t CODE_SET_PIN_MODE_INPUT_PULLDOWN = 0x3E3D;
 
 // // ADC Range: +/- 6.144V (1 bit = 3mV)
 // // EXAMPLE Comparator for ADC_CS1 Threshold: 1000 (3.000V)
@@ -820,6 +824,56 @@ void canMessagesSniff(const CAN_message_t &msgCAN) {
                         Serial1.println(msgCAN.buf[3]);
                         break;
                 }
+                break;
+            case CODE_SET_PIN_MODE_INPUT:
+                pinMode(msgCAN.buf[3], INPUT);
+
+                // a bit debug
+                Serial1.print("INPUT mode for PIN_");
+                Serial1.print(msgCAN.buf[3]);
+                Serial1.println(" is ENABLED");
+                break;
+            case CODE_SET_PIN_MODE_OUTPUT:
+                pinMode(msgCAN.buf[3], OUTPUT);
+                // make PWM control only if messageData != 0;
+                if (messageData) {
+                    // warning fan speed sets from 1 to 255
+                    pwmValue = ((float) messageData) / 255.0;
+                    pwmValue = (pwmValue * RESOLUTION_PWM_BIT);
+
+                    analogWriteFrequency(msgCAN.buf[3], 1000);
+                    analogWriteResolution(15);
+                    analogWrite(msgCAN.buf[3], 0);
+                }
+
+                // a bit debug
+                Serial1.print("OUTPUT mode for PIN_");
+                Serial1.print(msgCAN.buf[3]);
+                Serial1.println(" is ENABLED");
+                if (messageData) {
+                    Serial1.print("Also PIN_");
+                    Serial1.print(msgCAN.buf[3]);
+                    Serial1.print(": PWM = ");
+                    Serial1.print(pwmValue);
+                    Serial1.print(" / ");
+                    Serial1.println(RESOLUTION_PWM_BIT);
+                }
+                break;
+            case CODE_SET_PIN_MODE_INPUT_PULLUP:
+                pinMode(msgCAN.buf[3], INPUT_PULLUP);
+
+                // a bit debug
+                Serial1.print("INPUT_PULLUP mode for PIN_");
+                Serial1.print(msgCAN.buf[3]);
+                Serial1.println(" is ENABLED");
+                break;
+            case CODE_SET_PIN_MODE_INPUT_PULLDOWN:
+                pinMode(msgCAN.buf[3], INPUT_PULLDOWN);
+
+                // a bit debug
+                Serial1.print("INPUT_PULLDOWN mode for PIN_");
+                Serial1.print(msgCAN.buf[3]);
+                Serial1.println(" is ENABLED");
                 break;
         }
 
