@@ -336,6 +336,10 @@ void prepareResponseMessageParamPID(CAN_message_t &msgSend, const double &pidCoe
 }
 
 void canMessagesSniff(const CAN_message_t &msgCAN) {
+    // skip sync messages when id doesn't need
+    if ((msgCAN.id == START_MOVING_ID) && (!(isNewPositionForStepper0 && isNewPositionForStepper1)))
+        return;
+
     CAN_message_t msgSend;
 
     if (msgCAN.id != 0x080) {
