@@ -36,12 +36,19 @@ constexpr uint32_t CODE_SET_FAN_SPEED = 0x8083;
 constexpr uint32_t RESOLUTION_PWM_BYTE = 2;
 constexpr float RESOLUTION_PWM_BIT = 32767.0;
 
+constexpr uint32_t CODE_SET_PIN_MODE_INPUT = 0x3E3A;
+constexpr uint32_t CODE_SET_PIN_MODE_OUTPUT = 0x3E3B;
+constexpr uint32_t CODE_SET_PIN_MODE_INPUT_PULLUP = 0x3E3C;
+constexpr uint32_t CODE_SET_PIN_MODE_INPUT_PULLDOWN = 0x3E3D;
+
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> can1;
 CAN_message_t msg;
 
 AccelStepper stepper2(AccelStepper::DRIVER, STEPPER2_STEP_PIN, STEPPER2_DIR_PIN);
 MultiStepper steppers;
 long stepperPositions[1];
+
+float pwmValue = 0.0;
 
 void setup() {
     // enable LED indication
@@ -177,6 +184,56 @@ void loop() {
                     Serial1.print("Set speed for FAN: val=");
                     Serial1.println(pwmValue);
                 }
+                case CODE_SET_PIN_MODE_INPUT:
+                    pinMode(msg.buf[3], INPUT);
+
+                    // a bit debug
+                    Serial1.print("INPUT mode for PIN_");
+                    Serial1.print(msg.buf[3]);
+                    Serial1.println(" is ENABLED");
+                    break;
+                case CODE_SET_PIN_MODE_OUTPUT:
+                    pinMode(msg.buf[3], OUTPUT);
+                    // make PWM control only if messageData != 0;
+                    if (messageData) {
+                        // warning fan speed sets from 1 to 255
+                        pwmValue = ((float) messageData) / 255.0;
+                        pwmValue = (pwmValue * RESOLUTION_PWM_BIT);
+
+                        analogWriteFrequency(msg.buf[3], 1000);
+                        analogWriteResolution(15);
+                        analogWrite(msg.buf[3], 0);
+                    }
+
+                    // a bit debug
+                    Serial1.print("OUTPUT mode for PIN_");
+                    Serial1.print(msg.buf[3]);
+                    Serial1.println(" is ENABLED");
+                    if (messageData) {
+                        Serial1.print("Also PIN_");
+                        Serial1.print(msg.buf[3]);
+                        Serial1.print(": PWM = ");
+                        Serial1.print(pwmValue);
+                        Serial1.print(" / ");
+                        Serial1.println(RESOLUTION_PWM_BIT);
+                    }
+                    break;
+                case CODE_SET_PIN_MODE_INPUT_PULLUP:
+                    pinMode(msg.buf[3], INPUT_PULLUP);
+
+                    // a bit debug
+                    Serial1.print("INPUT_PULLUP mode for PIN_");
+                    Serial1.print(msg.buf[3]);
+                    Serial1.println(" is ENABLED");
+                    break;
+                case CODE_SET_PIN_MODE_INPUT_PULLDOWN:
+                    pinMode(msg.buf[3], INPUT_PULLDOWN);
+
+                    // a bit debug
+                    Serial1.print("INPUT_PULLDOWN mode for PIN_");
+                    Serial1.print(msg.buf[3]);
+                    Serial1.println(" is ENABLED");
+                    break;
                     break;
             }
 
